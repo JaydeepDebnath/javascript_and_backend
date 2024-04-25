@@ -9,12 +9,10 @@ app.use(cors({
     credentials : true,
 }))
 // config
-app.use(express.json({limit: "16kb"}))  // to accept json format
-app.use(express.urlencoded({extended:true,limit:
-    "20kb"}))        // to accept url
+app.use(express.json({limit: "16kb"}))
+app.use(express.urlencoded({extended: true, limit: "16kb"}))
 app.use(express.static("public"))
 app.use(cookieParser())
-
 
 // routes import.            mostly controlers,routes in production import in app file
 
