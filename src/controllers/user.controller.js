@@ -4,84 +4,180 @@ import {User} from "../models/user.models.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponce.js"
 
-const registerUser = asyncHandler( async (rq,res)=>{
-// get user details from frontend
-// validation - not empty,@ have or not
-// checkif user already exists : username,email
-// check for images,check for avtar 
-// upload them to cloudinary,avtar
-// create user object - creat entry in db
-// revome password and refresh token field from response
-// check for user creation 
-// return result
+import jwt from "jsonwebtoken"
+import mongoose from "mongoose";
+import { response } from "express"
 
-const {fullName,email,username,password} = req.body   // {destructur}.  body returns very object
-console.log("Email :",email)
-console.log("Fullname:",fullName)
+const generateAccessAndRefreshToken = async(userId)=>
+{
+    try {
+      const user = await User.findById(userId) 
+      const accessToken = user.generateAccessToken()
+      const refreshToken = user.generateRefreshToken()
 
-    // if (fullName === ""){
-    //     throw new ApiError(400,"Full name is required")
-    // }
+      user.refreshToken = refreshToken  //get refresh token from user
+      await user.save({validateBeforeSave : false})    // .save , save to the db.validteBeforeSave dosen't check any validation
+
+      return {accessToken,refreshToken}
+
+    } catch (error) {
+        throw new ApiError(500,"Something went wrong while generating refresh and access token")
+    }
+}
+
+const registerUser = asyncHandler( async (req, res) => {
+    // get user details from frontend
+    // validation - not empty
+    // check if user already exists: username, email
+    // check for images, check for avatar
+    // upload them to cloudinary, avatar
+    // create user object - create entry in db
+    // remove password and refresh token field from response
+    // check for user creation
+    // return res
+
+
+    const {fullName, email, username, password } = req.body
+    //console.log("email: ", email);
 
     if (
-        [fullName,email,username].some((field)=>
-        field?.trim()==="")   // if field exist '?' trim it.
-        ) { 
-            throw new ApiError(400,"All fields are required")
-                        // we can use an array .same as multiple loop
-        
-         }
-        //  const validateEmail = email.indexOf('@');   // email validation check
+        [fullName, email, username, password].some((field) => field?.trim() === "")
+    ) {
+        throw new ApiError(400, "All fields are required")
+    }
 
-        const exitedUser = User.findOne({               //  findOne returns first User match value
-            $or: [ { username },{ email } ]        // or take an array,we can check multiple methods using in a object
-        })
+    const existedUser = await User.findOne({
+        $or: [{ username }, { email }]
+    })
 
-        if ( exitedUser ) {
-            throw new ApiError(409,"User with email or username already exists")
+    if (existedUser) {
+        throw new ApiError(409, "User with email or username already exists")
+    }
+    //console.log(req.files);
+
+    const avatarLocalPath = req.files?.avatar[0]?.path;
+    //const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+    let coverImageLocalPath;
+    if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.files.coverImage[0].path
+    }
+    
+
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "Avatar file is required")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    if (!avatar) {
+        throw new ApiError(400, "Avatar file is required")
+    }
+   
+
+    const user = await User.create({
+        fullName,
+        avatar: avatar.url,
+        coverImage: coverImage?.url || "",
+        email, 
+        password,
+        username: username.toLowerCase()
+    })
+
+    const createdUser = await User.findById(user._id).select(
+        "-password -refreshToken"
+    )
+
+    if (!createdUser) {
+        throw new ApiError(500, "Something went wrong while registering the user")
+    }
+
+    return res.status(201).json(
+        new ApiResponse(200, createdUser, "User registered Successfully")
+    )
+}
+)
+
+const loginUser = asyncHandler(async(req,res)=>{
+    // req body -> data
+    // username or email
+    // find the user
+    // password check
+    // access and refresh token
+    // send secure cookie
+
+    const {email,username,password}=req.body
+
+    if(!username || !email){
+        throw new ApiError(400,"Username or password is required")
+    }
+
+    const user = await User.findOne({
+        $or : [{username},{email}]
+    })
+
+    if(!user){
+        throw new ApiError(404,"User does not exists")
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(password)
+    if(!isPasswordValid){
+        throw new ApiError(401,"Invalid user credentials")
+    }
+
+    const { accessToken, refreshToken }=await generateAccessAndRefreshToken(user._id)
+
+   const loggedInUser = await User.findById(user._id).select
+   ("-password -refreshToken")
+
+   const options = {
+    httpOnly : true,    // cookies only modifieble by db,could not from frontend 
+    secure : true
+   }
+
+   return res
+   .status(200)
+   .cookie("accessToken",accessToken,options)
+   .cookie("refreshToken",refreshToken,options)
+   .json(
+    new ApiResponse(
+        200,{
+            user : loggedInUser,accessToken,
+            refreshToken
+        },
+        "User logged in sucessfully"
+    )
+   )
+})
+
+const logoutUser = asyncHandler(async (req,res)=>{
+    await User.findByIdAndUpdate(
+        req.user._id,   // query
+        {
+            $set :
+            {
+                refreshToken : undefined      // // which method need to update in db
+            }            
+        },
+        {
+            new : true , 
         }
-        // req.body //express gives us data by body
-        const avatarLocalPath = req.files?.avatar[0]?.path;
-        const coverImageLocalPath = req.files?.coverImage[0]?.path;        
-        const profileImageLocalPath = req.files?.profileImage[0]?.path;        // multer gives files access.Avatar returns file,png,size property
-        console.log(req.files);
+    )
 
-        if (![avatarLocalPath,profileImageLocalPath]) {
-            throw new ApiError(400,"Avtar and Profile Image file must be required ")
-        }
-        const avatar = await uploadOnCloudinary(avatarLocalPath)
-        const profileImage = await uploadOnCloudinary(profileImageLocalPath)
-        const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+    const options = {
+        httpOnly : true,    // cookies only modifieble by db,could not from frontend 
+        secure : true
+       }
 
-        if(!avatar ){
-            throw new ApiError(400,"Avatar is required")
-        }
-        if(!profileImage){
-            throw new ApiError(401,"profile file is required")
-        }
-
-        const user = await User.create({
-            fullName,
-            avatar : avatar.url,    // avatar url store in db
-            coverImage : coverImage?.url || "",
-            profileImage : profileImage.url,
-            email,
-            password,
-            username: username.toLowerCase()
-        })
-
-        const createdUser = await User.findById(user._id).select(                // findbyId is a method which pass a id
-            "-password -refreshToken"                                            // .select is a method "which does not need you -..."    
-        )                    
-        
-        if (createdUser) {
-            throw new ApiError(500,"Something went wrong while registrating a user")
-        }
-
-        return res.status(201).json(
-            new ApiResponse(200,createdUser,"User registered sucessfully")
-        )
+       return res
+       .status(200)
+       .clearCookie("accessToken",options)
+       .clearCookie("refreshToken",options)
+       .json(new ApiResponse(200,{},"User logged out"))
 })
 export {
     registerUser,
+    loginUser,
+    logoutUser,
 }
