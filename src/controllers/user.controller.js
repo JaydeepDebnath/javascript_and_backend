@@ -247,7 +247,7 @@ const changeCurrentPassword = asyncHandler(async(req,
 
         return res
         .status(200)
-        .json(new  ApiResponse(200,"Password changed sucessfully"))
+        .json(new  ApiResponse(200,{},"Password changed sucessfully"))
 })
 
 const getCurrentUser = asyncHandler(async(req,res)=>{
@@ -264,7 +264,7 @@ const updateAccountDetails = asyncHandler(async(req,
            throw new ApiError(400,"All fields are required") 
         }
 
-        const user = User.findByIdAndUpdate(
+        const user = await User.findByIdAndUpdate(
             req.user?._id,
             {
                 $set:{
@@ -346,7 +346,82 @@ const updateUserAvatar = asyncHandler(async(req,res)=>
     .json(
         new ApiResponse(200,"Avatar Updated Sucessfully")
     )
+
+    const deleteOldAvatar = await User
+    .findByIdAndDelete(
+    req.user._id,
+    {
+        avatarLocalPath : null ,
+    }
+    )
 })
+
+
+const getUserChannelProfile = asyncHandler
+(async(req,res)=>
+{
+    const {username} = req.params
+
+    if(!username?.trim()){
+        throw new ApiError(400,"User Name is missing")
+    }
+
+    // User.find({username})
+
+   const channel = await User.aggregate([
+    {
+        $match:{                                        //filtering document
+            username : username
+        },
+    },
+    {
+        $lookup:{
+            from:"subscriptions",
+            localField : "_id",
+            foreignField :"channel",
+            as : "subscribers"
+           }
+    },
+    {
+        $lookup : {
+            from : "subscriptions",
+            localField : "_id",
+            foreignField : "subscriber",
+            as : "subscribersTo"
+        }
+    },
+    {
+        $addFields : {
+            subscribersCount : {
+                $size : "$subscribers"
+            },
+            channelSubscriberdToCount : {
+                $size : "$subscribersTo"
+            },
+                isSubscribed : {
+                    $cond : {
+                        if:{$in:[req.user?._id,"$subscribers.subscriber"]},
+                        then :true,
+                        else : false,
+                    }
+                }
+            }     
+        },
+        {
+            $project :{
+                fullName : 1,
+                username : 1,
+                subscribersCount : 1,
+                channelSubscriberdToCount : 1,
+                isSubscribed : 1,
+                avatar : 1,
+                coverImage: 1,
+                email : 1,
+            }
+        }
+   ])
+})
+
 export {
     registerUser,
     loginUser,
@@ -356,5 +431,6 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile,
 }
