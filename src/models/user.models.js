@@ -56,12 +56,16 @@ const userSchema = new Schema(
     }
 )
 
+
+// hooks
 userSchema.pre("save", async function (next) {
     if(!this.isModified("password")) return next();
 
     this.password = await bcrypt.hash(this.password, 10)
     next()
 })
+
+// password correction hooks
 
 userSchema.methods.isPasswordCorrect = async function(password){
     return await bcrypt.compare(password, this.password)

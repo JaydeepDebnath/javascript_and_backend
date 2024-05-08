@@ -451,7 +451,7 @@ const getWatchHistory = asyncHandler
                 $lookup : "videos",
                 localField : "watchHistory",
                 foreignField : "_id",
-                as : "WatchHistory",
+                as : "watchHistory",
                 pipeline:[     // to write nested pipelines
                     {
                         $lookup:{
@@ -507,4 +507,5 @@ export {
     updateUserAvatar,
     updateUserCoverImage,
     getUserChannelProfile,
+    getWatchHistory,
 }
