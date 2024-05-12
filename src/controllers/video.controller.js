@@ -67,3 +67,81 @@ const publishAVideo = asyncHandler(async (req, res) => {
 
 
 })
+
+const getVideoById = asyncHandler(async (req, res) => {
+    const { videoId } = req.params
+    //TODO: get video by id
+
+    const getVideo = await Video.findById(req.videos?._id)
+
+    if(!getVideo){
+        throw new ApiError(201,"Database dosen't found any video ID")
+    }
+
+})
+
+const updateVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.params
+    //TODO: update video details like title, description, thumbnail
+    const {title,description,thumbnail} = req.body
+
+    if(!(title || description || thumbnail)){
+        throw new ApiError(201,"Video title , description and thumbnail are required")
+    }
+
+    const updateVideoDetails = await Video.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                title,
+                description,
+            }
+        },
+        {new : true}
+
+    ).select("-password")
+
+    const thumbnailLocalPath = req.file?.path
+
+    if(!thumbnailLocalPath){
+     throw new ApiError(400,"Thumbnail file is missing")
+    }
+ 
+    const uploadThumbnail = await uploadOnCloudinary
+    (thumbnailLocalPath)
+ 
+    if(!uploadThumbnail.url){
+     throw new ApiError
+     (400,"Error while uploading on Thumbnail")
+    }
+
+    const updateThumbnail = await Video.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set :{
+                thumbnail : uploadThumbnail.url
+            }
+        },
+        {new : true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,"Thumbnail,Title,Description Updated Sucessfully")
+    )
+
+})
+
+// const deleteVideo = asyncHandler(async (req, res) => {
+//     const { videoId } = req.params
+//     //TODO: delete video
+
+//     const deleteAVideo = await User
+//     .findByIdAndDelete(
+//     req.videoId._id,
+//     {
+//         avatarLocalPath : null ,
+//     }
+//     )
+// })
