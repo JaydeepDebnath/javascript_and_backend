@@ -9,11 +9,48 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
     //TODO: get all videos based on query, sort, pagination
+    try {
+        // Construct the query object
+        const filter = {};
+        if (query) {
+            filter.$or = [
+                { title: { $regex: query, $options: 'i' } },
+                { description: { $regex: query, $options: 'i' } }
+            ];
+        }
+        if (userId) {
+            filter.userId = userId;
+        }
+
+        // Construct the sort object
+        const sort = {};
+        if (sortBy && sortType) {
+            sort[sortBy] = sortType === 'asc' ? 1 : -1;
+        }
+
+        // Perform the database query with pagination and sorting
+        const videos = await Video.find(filter)
+            .sort(sort)
+            .skip((page - 1) * limit)
+            .limit(parseInt(limit));
+
+        // Count total number of videos (without pagination)
+        const totalVideos = await Video.countDocuments(filter);
+
+        // Respond with the retrieved videos and pagination metadata
+        res.status(200).json({
+            videos,
+            currentPage: page,
+            totalPages: Math.ceil(totalVideos / limit)
+        });
+    } catch (error) {
+        // Handle any errors that occur during the process
+        next(error);
+    }
 })
 
 const publishAVideo = asyncHandler(async (req, res) => {
     const {videoId} = req.params
-    // TODO: get video, upload to cloudinary, create video
     const videoLocalPath = req.file?.path
 
     if(!videoLocalPath){
@@ -87,7 +124,7 @@ const getVideoById = asyncHandler(async (req, res) => {
 const updateVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     const {title,description,thumbnail} = req.body
-    //TODO: update video details like title, description, thumbnail
+
 
     if(!(title ||description ||thumbnail)){
         throw new ApiError(201,"All fields are requird")
