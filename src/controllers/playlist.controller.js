@@ -59,8 +59,19 @@ const getPlaylistById = asyncHandler(async (req, res) => {
     const {playlistId} = req.params
     //TODO: get playlist by id
     try {
+        const playlist = await Playlist.findById(playlistId).populate('videos').populate('owner');
+
+        if(!playlist){
+            throw new ApiError(404,"Playlist does not exists")
+        }
         
-        
+        return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,"Playlist id get sucessfully"
+            ) 
+        )
     } catch (error) {
         throw new ApiError(404,"Error occurs in searching playlist")
     }
@@ -68,6 +79,44 @@ const getPlaylistById = asyncHandler(async (req, res) => {
 
 const addVideoToPlaylist = asyncHandler(async (req, res) => {
     const {playlistId, videoId} = req.params
+    try {
+        const playList = Playlist.findById(playlistId).populate('videos').populate('owner');
+        const videos = Playlist.aggregate([
+            {
+                $match:{
+                    videos : mongoose.Types.ObjectId(videoId)
+                }
+            },
+            {
+                $lookup:{
+                    from: "users",
+                    localField: "videos",
+                    foreignField : "_id",
+                    as : "videos",
+                }
+            },
+            {
+                $unwind:"$videos"
+            },
+            {
+                $project:{
+                    "_id":"$videos._id",
+                    "userName":"$videos.userName",
+                }
+            }
+        ])
+
+        return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,"Videos added to playlist"
+            ) 
+        )
+        
+    } catch (error) {
+        throw new ApiError(404,"Error while adding videos to playlist")
+    }
 })
 
 const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
