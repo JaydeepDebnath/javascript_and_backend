@@ -123,17 +123,99 @@ const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
     const {playlistId, videoId} = req.params
     // TODO: remove video from playlist
 
+    try {
+        const playlist = await Playlist.aggregate([
+            {
+                $match:{_id:mongoose.Types.ObjectId(playlistId)},
+            },
+            {
+                $set:{
+                    videos : { $filter: { input:"$vidos",cond:{$ne: ["$$this", mongoose.Types.ObjectId(videoId)] } } }
+                }
+            }
+        ])
+
+        if (!playlist.length == 0){
+            throw new ApiError(404,"Playlist not found")
+        }
+
+        return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,playlist[0],
+                "Video removed from playlist"
+            ) 
+        )
+        
+    } catch (error) {
+        throw new ApiError(404,"Not existing video can not remove from playlist")
+    }
+
 })
 
 const deletePlaylist = asyncHandler(async (req, res) => {
     const {playlistId} = req.params
     // TODO: delete playlist
+
+    try {
+
+        if(!playlistId){
+            throw new ApiError(400,"Playlist ID is required")
+        }
+
+        const deletePlaylist = await Playlist.findByIdAndDelete(playlistId)
+
+        return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                "Playlist deleted sucessfully"
+            ) 
+        )
+    } catch (error) {
+        throw new ApiError(404,"Non existing playlist can not be deleted")
+    }
 })
 
 const updatePlaylist = asyncHandler(async (req, res) => {
     const {playlistId} = req.params
     const {name, description} = req.body
     //TODO: update playlist
+
+    try {
+
+        if(!(playlistId || name || description)){
+            throw new ApiError(400,"All fields are required to update a playlist")
+        }
+        const updatedPlaylist = await Playlist.aggregate([
+            {
+                $match: {
+                    _id : mongoose.Types.ObjectId(playlistId)
+                }
+            },
+            {
+             $set:{
+                name,
+                description,
+             }   
+            },
+            { new:true }
+        ])
+
+        return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                "Playlist deleted sucessfully"
+            ) 
+        )
+
+    } catch (error) {
+        throw new ApiError(400," Playlist updated sucessfully ")
+    }
 })
 
 export {
